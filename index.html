@@ -2,12 +2,12 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>基準点マップ</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f6f7f8;color:#111}header{position:sticky;top:0;background:#fff;z-index:1000;padding:10px;border-bottom:1px solid #ddd}h1{font-size:18px;margin:0 0 8px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}button,select,input{font-size:16px;padding:9px;border:1px solid #bbb;border-radius:9px;background:#fff}button{background:#0b74de;color:#fff;border:0;font-weight:700}.small{background:#666;font-size:13px;padding:7px 9px}label{font-size:14px}.status{font-size:13px;line-height:1.45;margin-top:8px;color:#444}.warn{color:#b00020;font-weight:700}#map{height:42vh;min-height:260px;background:#ddd}.wrap{padding:10px}.card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:12px;margin:10px 0;box-shadow:0 1px 3px #0001}.name{font-size:17px;font-weight:700}.dist{font-weight:700;color:#0b74de}.meta{font-size:14px;color:#444;margin-top:5px;line-height:1.5}.links{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}.links a{padding:8px 10px;border-radius:8px;background:#eee;color:#111;text-decoration:none;font-size:14px}.leaflet-popup-content{font-size:14px}.sub{font-size:12px;color:#666}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f6f7;color:#111}header{position:sticky;top:0;z-index:1000;background:#fff;padding:10px;border-bottom:1px solid #ddd}h1{font-size:18px;margin:0 0 8px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}button,select,input{font-size:16px;padding:9px;border:1px solid #bbb;border-radius:9px;background:#fff}button{border:0;background:#0b74de;color:white;font-weight:700}.small{font-size:13px;padding:7px 9px;background:#666}label{font-size:14px}.status{font-size:13px;line-height:1.45;margin-top:8px;color:#444}.warn{color:#b00020;font-weight:700}.ok{color:#087a2f;font-weight:700}#map{height:42vh;min-height:280px;width:100%;background:#d8dee7;display:block}.mapFallback{padding:14px;color:#555}.wrap{padding:10px}.card{background:white;border:1px solid #ddd;border-radius:12px;padding:12px;margin:10px 0;box-shadow:0 1px 3px #0001}.name{font-size:17px;font-weight:700}.dist{font-weight:700;color:#0b74de}.meta{font-size:14px;color:#444;margin-top:5px;line-height:1.55}.links{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.links a{padding:8px 10px;border-radius:8px;background:#eee;color:#111;text-decoration:none;font-size:14px}.sub{font-size:12px;color:#666}.leaflet-popup-content{font-size:14px}
 </style>
 </head>
 <body>
@@ -21,74 +21,91 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 <button id="reloadBtn" class="small">再読込</button>
 </div>
 <div class="row" style="margin-top:8px"><input id="q" placeholder="点名・コード検索" style="flex:1;min-width:180px"><select id="limit"><option value="50">50点</option><option value="100">100点</option><option value="200" selected>200点</option><option value="500">500点</option></select></div>
-<div class="status" id="status">起動中...</div>
+<div id="status" class="status">起動中...</div>
 </header>
 <div id="map"></div>
-<div class="wrap" id="list"></div>
+<div id="list" class="wrap"></div>
 <script>
 const CSV_FILE='kijunten.csv';
-const need=['基準点コード','等級種別','基準点名','北緯','東経','現況状態'];
-let points=[], userPos=null, markers=[], map=null, meMarker=null, csvInfo={rows:0,bad:0,enc:''};
+const REQUIRED=['基準点コード','等級種別','基準点名','北緯','東経','現況状態'];
+let allPoints=[], userPos=null, map=null, markers=[], meMarker=null, info={rows:0,bad:0,enc:'',headers:[]};
 const $=id=>document.getElementById(id);
-function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function setStatus(msg){$('status').innerHTML=msg;}
-function initMap(){
- if(map || !window.L) return;
- map=L.map('map').setView([32.582,131.665],10); // 延岡周辺
- L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map);
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function status(html){$('status').innerHTML=html;}
+function dmsToDeg(value){
+ let s=String(value??'').trim(); if(!s)return NaN;
+ s=s.replace(/[＋+]/,'').replace('－','-').replace(/,/g,'.');
+ let sign=s.startsWith('-')?-1:1; s=s.replace(/^-/,'');
+ let n=parseFloat(s); if(!Number.isFinite(n))return NaN;
+ if(Math.abs(n)>1000){let deg=Math.floor(n/10000);let min=Math.floor((n-deg*10000)/100);let sec=n-deg*10000-min*100;return sign*(deg+min/60+sec/3600);}
+ return sign*n;
 }
+function distanceKm(a,b,c,d){const R=6371,rad=x=>x*Math.PI/180;const A=rad(c-a),B=rad(d-b);const x=Math.sin(A/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(B/2)**2;return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
 function parseCSV(text){
  text=String(text||'').replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
- const first=(text.split('\n')[0]||''); const d=((first.match(/\t/g)||[]).length>(first.match(/,/g)||[]).length)?'\t':',';
- const rows=[]; let row=[], cell='', quote=false;
- for(let i=0;i<text.length;i++){const c=text[i], n=text[i+1];
-  if(quote){ if(c==='"'&&n==='"'){cell+='"';i++;} else if(c==='"'){quote=false;} else cell+=c; }
-  else{ if(c==='"') quote=true; else if(c===d){row.push(cell);cell='';} else if(c==='\n'){row.push(cell); if(row.some(v=>v.trim()!=='')) rows.push(row); row=[];cell='';} else cell+=c; }
+ const first=(text.split('\n')[0]||'');
+ const tabs=(first.match(/\t/g)||[]).length, commas=(first.match(/,/g)||[]).length;
+ const delim=tabs>commas?'\t':',';
+ const rows=[];let row=[],cell='',q=false;
+ for(let i=0;i<text.length;i++){const c=text[i],n=text[i+1];
+  if(q){if(c==='"'&&n==='"'){cell+='"';i++;}else if(c==='"'){q=false;}else cell+=c;}
+  else{if(c==='"')q=true;else if(c===delim){row.push(cell);cell='';}else if(c==='\n'){row.push(cell);if(row.some(v=>String(v).trim()!==''))rows.push(row);row=[];cell='';}else cell+=c;}
  }
- row.push(cell); if(row.some(v=>String(v).trim()!=='')) rows.push(row);
- if(!rows.length) return [];
- const headers=rows.shift().map(s=>String(s||'').replace(/^\uFEFF/,'').trim());
+ row.push(cell);if(row.some(v=>String(v).trim()!==''))rows.push(row);
+ if(!rows.length)return [];
+ const headers=rows.shift().map(h=>String(h||'').replace(/^\uFEFF/,'').trim());
+ info.headers=headers;
  return rows.map(r=>Object.fromEntries(headers.map((h,i)=>[h,String(r[i]??'').trim()])));
 }
-function bestDecode(buf){
- const encs=['utf-8','shift_jis','windows-31j']; let best={text:'',enc:'',score:-999};
- for(const enc of encs){try{const text=new TextDecoder(enc).decode(buf); const head=text.slice(0,300); let score=0; need.forEach(n=>{if(head.includes(n))score+=20}); score-=(head.match(/�/g)||[]).length*5; if(score>best.score)best={text,enc,score};}catch(e){}}
+function decodeBuffer(buf){
+ const encs=['utf-8','shift_jis','windows-31j'];let best={text:'',enc:'',score:-9999};
+ for(const enc of encs){try{const text=new TextDecoder(enc).decode(buf);const head=text.slice(0,500);let score=0;REQUIRED.forEach(k=>{if(head.includes(k))score+=50});score-=(head.match(/�/g)||[]).length*20;if(score>best.score)best={text,enc,score};}catch(e){}}
  return best;
 }
-function dmsToDeg(v){
- let s=String(v??'').trim(); if(!s) return NaN; s=s.replace(/[＋+]/,'').replace('－','-');
- let sign=s.startsWith('-')?-1:1; s=s.replace(/^-/, '').replace(/[,，]/g,'.');
- let num=parseFloat(s); if(!isFinite(num)) return NaN;
- if(Math.abs(num)>1000){const deg=Math.floor(num/10000); const min=Math.floor((num-deg*10000)/100); const sec=num-deg*10000-min*100; return sign*(deg+min/60+sec/3600);}
- return sign*num;
+function initMap(){
+ const el=$('map');
+ if(map)return true;
+ if(!window.L){el.innerHTML='<div class="mapFallback">地図ライブラリを読み込めません。通信環境を確認してください。リストとGoogleマップリンクは使えます。</div>';return false;}
+ map=L.map('map',{zoomControl:true}).setView([32.582,131.665],10);
+ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map);
+ setTimeout(()=>map.invalidateSize(),200);
+ return true;
 }
-function hav(a,b,c,d){const R=6371,rad=x=>x*Math.PI/180;const A=rad(c-a),B=rad(d-b);const x=Math.sin(A/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(B/2)**2;return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
-async function fetchWithTimeout(url,ms=15000){const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),ms); try{return await fetch(url,{cache:'no-store',signal:ctrl.signal});}finally{clearTimeout(t);}}
-function filtered(){
- const r=+$('radius').value, g=$('grade').value, q=$('q').value.trim().toLowerCase(), normal=$('normalOnly').checked;
- let arr=points.filter(p=>(!g||p.grade===g)&&(!normal||p.status==='正常')&&(!q||(p.name+p.code+p.city+p.muni).toLowerCase().includes(q)));
- if(userPos) arr=arr.map(p=>({...p,dist:hav(userPos.lat,userPos.lon,p.lat,p.lon)})).filter(p=>p.dist<=r).sort((a,b)=>a.dist-b.dist);
- else arr=arr.map(p=>({...p,dist:null})).sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+async function loadCSV(){
+ try{
+  status('CSV読み込み中...'); initMap(); allPoints=[]; info={rows:0,bad:0,enc:'',headers:[]}; $('grade').innerHTML='<option value="">全等級</option>';
+  const res=await fetch(CSV_FILE+'?v='+Date.now(),{cache:'no-store'});
+  if(!res.ok)throw new Error('kijunten.csvが取得できません HTTP '+res.status);
+  const buf=await res.arrayBuffer(); const dec=decodeBuffer(buf); info.enc=dec.enc || '不明';
+  const rows=parseCSV(dec.text); info.rows=rows.length;
+  const miss=REQUIRED.filter(k=>!info.headers.includes(k));
+  if(miss.length)throw new Error('必要列なし: '+miss.join(', ')+' / 読込列: '+info.headers.join(' | '));
+  let bad=0;
+  allPoints=rows.map(o=>{const lat=dmsToDeg(o['北緯']),lon=dmsToDeg(o['東経']); if(!Number.isFinite(lat)||!Number.isFinite(lon))bad++; return {code:o['基準点コード'],grade:o['等級種別'],name:o['基準点名'],lat,lon,status:o['現況状態'],elev:o['標高'],pref:o['都道府県名']||'',city:o['自治体名']||'',x:o['X']||'',y:o['Y']||''};}).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
+  info.bad=bad;
+  [...new Set(allPoints.map(p=>p.grade).filter(Boolean))].sort().forEach(g=>$('grade').insertAdjacentHTML('beforeend',`<option value="${esc(g)}">${esc(g)}</option>`));
+  render();
+ }catch(e){status('<span class="warn">読み込みエラー: '+esc(e.message)+'</span><br><span class="sub">index.html と kijunten.csv を同じフォルダに置いて、両方上書きしてください。</span>');$('list').innerHTML='<div class="card warn">CSVを読めていません。</div>';}
+}
+function getFiltered(){
+ const g=$('grade').value, normal=$('normalOnly').checked, q=$('q').value.trim().toLowerCase(), radius=+$('radius').value;
+ let arr=allPoints.filter(p=>(!g||p.grade===g)&&(!normal||String(p.status).trim()==='正常')&&(!q||(p.name+p.code+p.pref+p.city+p.grade).toLowerCase().includes(q)));
+ if(userPos){arr=arr.map(p=>({...p,dist:distanceKm(userPos.lat,userPos.lon,p.lat,p.lon)})).filter(p=>p.dist<=radius).sort((a,b)=>a.dist-b.dist);} 
+ else {arr=arr.map(p=>({...p,dist:null})).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ja'));}
  return arr;
 }
 function render(){
- initMap(); const lim=+$('limit').value, arr=filtered(), shown=arr.slice(0,lim);
- setStatus(`CSV ${csvInfo.rows}行読込 / 有効座標 ${points.length}点 / 座標不明 ${csvInfo.bad}点 / ${csvInfo.enc}<br>条件一致 ${arr.length}点 / 表示 ${shown.length}点`+(userPos?`（現在地から${$('radius').value}km以内）`:'（現在地未取得）'));
- if(map){markers.forEach(m=>map.removeLayer(m)); markers=[]; shown.forEach(p=>{const m=L.marker([p.lat,p.lon]).addTo(map).bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.grade)} / ${esc(p.status)}<br>${p.dist!=null?p.dist.toFixed(2)+'km<br>':''}<a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}" target="_blank">Googleマップ</a>`); markers.push(m);}); if(shown.length && !userPos){const b=L.latLngBounds(shown.map(p=>[p.lat,p.lon])); map.fitBounds(b.pad(0.2));}}
- $('list').innerHTML=shown.map(p=>{const mapurl=`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`; const nav=`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}&travelmode=driving`;return `<div class="card"><div class="name">${esc(p.name)} ${p.dist!=null?`<span class="dist">${p.dist.toFixed(2)}km</span>`:''}</div><div class="meta">${esc(p.grade)} / ${esc(p.status)}<br>コード: ${esc(p.code)}<br>${esc(p.city)} ${esc(p.muni)}<br>${p.lat.toFixed(7)}, ${p.lon.toFixed(7)}<br>標高: ${esc(p.elev||'')}</div><div class="links"><a href="${mapurl}" target="_blank">地図</a><a href="${nav}" target="_blank">経路</a></div></div>`}).join('') || '<div class="card warn">条件に合う点がありません。半径を広げるか「正常のみ」を外してください。</div>';
+ initMap(); const arr=getFiltered(); const shown=arr.slice(0,+$('limit').value);
+ status(`<span class="ok">CSV読込OK</span>：${info.rows}行 / 有効座標 ${allPoints.length}点 / 座標不明 ${info.bad}点 / 文字コード ${esc(info.enc)}<br>条件一致 ${arr.length}点 / 表示 ${shown.length}点`+(userPos?` / 現在地から${$('radius').value}km以内`:' / 現在地未取得なので全域から表示'));
+ if(map){markers.forEach(m=>map.removeLayer(m));markers=[];shown.forEach(p=>{const m=L.marker([p.lat,p.lon]).addTo(map).bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.grade)} / ${esc(p.status)}${p.dist!=null?'<br>'+p.dist.toFixed(2)+'km':''}<br><a target="_blank" href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}">Googleマップ</a>`);markers.push(m);});
+  if(userPos){if(meMarker)map.removeLayer(meMarker);meMarker=L.circleMarker([userPos.lat,userPos.lon],{radius:8}).addTo(map).bindPopup('現在地');map.setView([userPos.lat,userPos.lon],13);} else if(shown.length){map.fitBounds(L.latLngBounds(shown.map(p=>[p.lat,p.lon])).pad(0.2));}
+  setTimeout(()=>map.invalidateSize(),100);
+ }
+ $('list').innerHTML=shown.map(p=>{const mapurl=`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`;const nav=`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}&travelmode=driving`;return `<div class="card"><div class="name">${esc(p.name)} ${p.dist!=null?`<span class="dist">${p.dist.toFixed(2)}km</span>`:''}</div><div class="meta">${esc(p.grade)} / ${esc(p.status)}<br>コード: ${esc(p.code)}<br>${esc(p.pref)} ${esc(p.city)}<br>緯度経度: ${p.lat.toFixed(7)}, ${p.lon.toFixed(7)}<br>標高: ${esc(p.elev)} / XY: ${esc(p.x)}, ${esc(p.y)}</div><div class="links"><a target="_blank" href="${mapurl}">Googleマップ</a><a target="_blank" href="${nav}">経路</a></div></div>`}).join('') || '<div class="card warn">条件に合う点がありません。半径を広げる、等級を全等級に戻す、または「正常のみ」を外してください。</div>';
 }
-async function load(){
- try{setStatus('CSV読み込み中...'); initMap(); points=[]; csvInfo={rows:0,bad:0,enc:''}; $('grade').innerHTML='<option value="">全等級</option>';
-  const res=await fetchWithTimeout(CSV_FILE+'?v='+Date.now()); if(!res.ok) throw new Error('kijunten.csvを取得できません HTTP '+res.status);
-  const buf=await res.arrayBuffer(); const dec=bestDecode(buf); csvInfo.enc='文字コード:'+dec.enc; const rows=parseCSV(dec.text); csvInfo.rows=rows.length;
-  const headers=Object.keys(rows[0]||{}); const miss=need.filter(n=>!headers.includes(n)); if(miss.length) throw new Error('必要列なし: '+miss.join(', ')+' / 読取列: '+headers.join(', '));
-  const bad=[]; points=rows.map(o=>{const lat=dmsToDeg(o['北緯']), lon=dmsToDeg(o['東経']); const p={code:o['基準点コード'],grade:o['等級種別'],name:o['基準点名'],lat,lon,status:o['現況状態'],elev:o['標高'],city:o['都道府県名']||'',muni:o['自治体名']||''}; if(!isFinite(lat)||!isFinite(lon)) bad.push(o); return p;}).filter(p=>isFinite(p.lat)&&isFinite(p.lon)); csvInfo.bad=bad.length;
-  [...new Set(points.map(p=>p.grade).filter(Boolean))].sort().forEach(x=>$('grade').insertAdjacentHTML('beforeend',`<option value="${esc(x)}">${esc(x)}</option>`)); render();
- }catch(e){setStatus('<span class="warn">読み込みエラー: '+esc(e.message)+'</span><br><span class="sub">index.html と kijunten.csv を同じ場所に置いてください。</span>');}
-}
-$('locBtn').onclick=()=>{if(!navigator.geolocation){setStatus('<span class="warn">位置情報が使えません</span>');return;} setStatus('現在地取得中...'); navigator.geolocation.getCurrentPosition(pos=>{userPos={lat:pos.coords.latitude,lon:pos.coords.longitude}; initMap(); if(map){if(meMarker)map.removeLayer(meMarker); meMarker=L.circleMarker([userPos.lat,userPos.lon],{radius:8}).addTo(map).bindPopup('現在地'); map.setView([userPos.lat,userPos.lon],13);} render();},err=>setStatus('<span class="warn">現在地取得失敗: '+esc(err.message)+'</span>'),{enableHighAccuracy:true,timeout:15000,maximumAge:10000});};
-$('reloadBtn').onclick=load; ['radius','grade','normalOnly','q','limit'].forEach(id=>$(id).addEventListener('input',render));
-window.addEventListener('load',load);
+$('locBtn').onclick=()=>{if(!navigator.geolocation){status('<span class="warn">このブラウザでは位置情報が使えません。</span>');return;}status('現在地取得中...');navigator.geolocation.getCurrentPosition(pos=>{userPos={lat:pos.coords.latitude,lon:pos.coords.longitude};render();},err=>status('<span class="warn">現在地取得失敗: '+esc(err.message)+'</span>'),{enableHighAccuracy:true,timeout:15000,maximumAge:10000});};
+$('reloadBtn').onclick=loadCSV;['radius','grade','normalOnly','q','limit'].forEach(id=>$(id).addEventListener('input',render));
+window.addEventListener('load',loadCSV);
 </script>
 </body>
 </html>
