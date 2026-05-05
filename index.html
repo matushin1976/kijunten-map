@@ -1,148 +1,131 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>基準点 5km検索 v2026-05-04-3-sima</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>基準点マップ GeoJSON版</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f6f7f8;color:#111}header{position:sticky;top:0;z-index:1000;background:#fff;padding:10px;border-bottom:1px solid #ddd}h1{font-size:18px;margin:0 0 8px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:7px}button,select,input{font-size:16px;padding:9px;border:1px solid #bbb;border-radius:9px;background:#fff}button{border:0;background:#0b74de;color:#fff;font-weight:700}.small{font-size:13px;padding:7px 9px;background:#666}.status{font-size:13px;line-height:1.45;margin-top:8px;color:#333}.ok{color:#087a2f;font-weight:700}.warn{color:#b00020;font-weight:700}.sub{font-size:12px;color:#666}#map{height:42vh;min-height:280px;width:100%;background:#dfe6ee}.mapFallback{padding:14px;color:#555}.wrap{padding:10px}.card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:12px;margin:10px 0;box-shadow:0 1px 3px #0001}.name{font-size:17px;font-weight:700}.dist{font-weight:700;color:#0b74de}.meta{font-size:14px;color:#444;margin-top:5px;line-height:1.55}.links{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.links a{padding:8px 10px;border-radius:8px;background:#eee;color:#111;text-decoration:none;font-size:14px}.pill{display:inline-block;border-radius:999px;background:#eee;padding:2px 8px;margin-left:5px;font-size:12px}.leaflet-popup-content{font-size:14px}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;background:#f6f7f9;color:#111}
+  header{position:sticky;top:0;z-index:1000;background:#fff;border-bottom:1px solid #ddd;padding:10px}
+  h1{font-size:18px;margin:0 0 4px}.ver{font-size:12px;color:#666}
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  button,select,input{font-size:15px;padding:9px;border:1px solid #bbb;border-radius:8px;background:#fff}
+  button{background:#0b66c3;color:#fff;border:none;font-weight:600}.secondary{background:#444}.danger{background:#888}
+  label{font-size:13px;display:flex;align-items:center;gap:6px}.full{grid-column:1/-1}
+  #map{height:42vh;min-height:280px;background:#ddd}.status{padding:8px 10px;font-size:13px;color:#333;background:#fff;border-bottom:1px solid #ddd}
+  #list{padding:8px}.card{background:#fff;border:1px solid #ddd;border-radius:12px;margin:8px 0;padding:10px;box-shadow:0 1px 2px #0001}
+  .row{display:flex;gap:8px;align-items:flex-start}.title{font-weight:700;font-size:16px}.meta{font-size:13px;color:#444;margin-top:4px;line-height:1.5}.links a{display:inline-block;margin:8px 8px 0 0;color:#0b66c3;text-decoration:none;font-weight:600}.pill{display:inline-block;border-radius:999px;background:#eef;padding:2px 7px;margin-right:4px;font-size:12px}.warn{color:#a15c00}.err{color:#b00020;font-weight:700}
 </style>
 </head>
 <body>
 <header>
-<h1>基準点 5km検索 <span class="pill">v2026-05-04-3-sima</span></h1>
-<div class="row">
-<button id="locBtn">現在地から検索</button>
-<select id="radius"><option value="1">1km以内</option><option value="3">3km以内</option><option value="5" selected>5km以内</option><option value="10">10km以内</option><option value="20">20km以内</option><option value="50">50km以内</option></select>
-<select id="grade"><option value="">全等級</option></select>
-<label><input type="checkbox" id="normalOnly" checked> 正常のみ</label>
-<button id="reloadBtn" class="small">CSV再読込</button>
-<button id="dlSimaBtn" class="small" style="background:#0a7a3a">選択SIMA</button>
-<button id="selShownBtn" class="small" style="background:#555">表示分選択</button>
-<button id="clearSelBtn" class="small" style="background:#777">選択解除</button>
-</div>
-<div class="row"><input id="q" placeholder="点名・コード・自治体名で検索" style="flex:1;min-width:180px"><select id="limit"><option value="50">50点表示</option><option value="100">100点表示</option><option value="200" selected>200点表示</option><option value="500">500点表示</option></select></div>
-<div id="status" class="status">起動中...</div>
+  <h1>基準点マップ</h1><div class="ver">v2026-05-05-geojson-merged</div>
+  <div class="controls">
+    <button id="locBtn">現在地から検索</button>
+    <select id="radius"><option value="1">1km以内</option><option value="3">3km以内</option><option value="5" selected>5km以内</option><option value="10">10km以内</option><option value="20">20km以内</option><option value="50">50km以内</option></select>
+    <select id="grade"><option value="">等級すべて</option></select>
+    <select id="kind"><option value="">Base/Publicすべて</option><option value="Base">基本基準点</option><option value="Public">公共基準点</option></select>
+    <input id="q" class="full" placeholder="点名・コード・機関名で検索" />
+    <label><input type="checkbox" id="normalOnly" checked> 正常系のみ</label>
+    <select id="max"><option value="50">最大50点</option><option value="100">最大100点</option><option value="200" selected>最大200点</option><option value="500">最大500点</option></select>
+    <button id="selectShown" class="secondary">表示分選択</button><button id="clearSel" class="danger">選択解除</button>
+    <button id="dlSima" class="full">選択SIMAダウンロード</button>
+  </div>
 </header>
 <div id="map"></div>
-<div id="list" class="wrap"></div>
+<div id="status" class="status">GeoJSON読込中...</div>
+<div id="list"></div>
 <script>
-'use strict';
-const CSV_FILE='kijunten.csv';
-const REQUIRED=['基準点コード','等級種別','基準点名','北緯','東経','現況状態'];
-let allPoints=[],userPos=null,map=null,markers=[],meMarker=null,info={rows:0,bad:0,headers:[],enc:'未判定'},selectedCodes=new Set(),lastShown=[];
+const DATA_URL='kijunten.geojson';
+const defaultCenter=[32.58,131.66]; // 延岡周辺
+let map, data=[], markers=L.layerGroup(), currentPos=null, shown=[], selected=new Set();
 const $=id=>document.getElementById(id);
-const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-function setStatus(html){$('status').innerHTML=html;}
-function normalizeHeader(h){return String(h??'').replace(/^\uFEFF/,'').trim();}
-function dmsToDeg(value){
-  let s=String(value??'').trim(); if(!s)return NaN;
-  s=s.replace(/[＋+]/g,'').replace(/[－−]/g,'-').replace(/,/g,'');
-  const sign=s.startsWith('-')?-1:1; s=s.replace(/^-/,'');
-  const n=parseFloat(s); if(!Number.isFinite(n))return NaN;
-  if(Math.abs(n)>=10000){const deg=Math.floor(n/10000);const min=Math.floor((n-deg*10000)/100);const sec=n-deg*10000-min*100;return sign*(deg+min/60+sec/3600);} 
-  return sign*n;
-}
-function distanceKm(lat1,lon1,lat2,lon2){const R=6371;const rad=x=>x*Math.PI/180;const dlat=rad(lat2-lat1),dlon=rad(lon2-lon1);const a=Math.sin(dlat/2)**2+Math.cos(rad(lat1))*Math.cos(rad(lat2))*Math.sin(dlon/2)**2;return 2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
-function parseDelimited(text){
-  text=String(text||'').replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
-  const first=text.split('\n')[0]||''; const delim=((first.match(/\t/g)||[]).length>(first.match(/,/g)||[]).length)?'\t':',';
-  const rows=[];let row=[],cell='',q=false;
-  for(let i=0;i<text.length;i++){const c=text[i],n=text[i+1];
-    if(q){if(c==='"'&&n==='"'){cell+='"';i++;}else if(c==='"'){q=false;}else{cell+=c;}}
-    else{if(c==='"'){q=true;}else if(c===delim){row.push(cell);cell='';}else if(c==='\n'){row.push(cell); if(row.some(v=>String(v).trim()!=='')) rows.push(row); row=[]; cell='';}else{cell+=c;}}
-  }
-  row.push(cell); if(row.some(v=>String(v).trim()!=='')) rows.push(row);
-  if(!rows.length)return [];
-  const headers=rows.shift().map(normalizeHeader); info.headers=headers;
-  return rows.map(r=>Object.fromEntries(headers.map((h,i)=>[h,String(r[i]??'').trim()])));
-}
-function decodeArrayBuffer(buf){
-  const encs=['utf-8','shift_jis','windows-31j']; let best={text:'',enc:'不明',score:-1e9};
-  for(const enc of encs){try{const text=new TextDecoder(enc).decode(buf);const head=text.slice(0,600);let score=0;REQUIRED.forEach(k=>{if(head.includes(k))score+=100;}); score-=(head.match(/�/g)||[]).length*50; if(score>best.score)best={text,enc,score};}catch(e){}}
-  return best;
-}
 function initMap(){
-  const el=$('map');
-  if(map)return true;
-  if(!window.L){el.innerHTML='<div class="mapFallback">地図ライブラリを読み込めません。通信環境がない場合でも、下の一覧とGoogleマップリンクは使えます。</div>';return false;}
-  map=L.map('map',{zoomControl:true}).setView([32.582,131.665],10);
+  map=L.map('map').setView(defaultCenter,11);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map);
-  setTimeout(()=>map.invalidateSize(),250); return true;
+  markers.addTo(map);
 }
-async function loadCSV(){
+function norm(s){return (s??'').toString().trim();}
+function getName(p){return norm(p['基準点名']||p['点名']||p.name||'名称なし');}
+function getCode(p){return norm(p['基準点コード']||p['成果ID']||'');}
+function getGrade(p){return norm(p['等級種別']||p['等級']||p['種別']||'');}
+function getStatus(p){return norm(p['現況状態']||p['成果状態']||'');}
+function getElev(p){return norm(p['標高']||'');}
+function getKind(p){return norm(p['_sourceKind']||((p['基準点コード'])?'Base':'Public'));}
+function isNormal(st){return !st || st.includes('正常') || st.includes('報告なし');}
+function hav(a,b,c,d){const R=6371000,rad=Math.PI/180; const dlat=(c-a)*rad,dlon=(d-b)*rad; const x=Math.sin(dlat/2)**2+Math.cos(a*rad)*Math.cos(c*rad)*Math.sin(dlon/2)**2; return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
+function parseFeatures(gj){
+  return (gj.features||[]).map((f,i)=>{const c=f.geometry&&f.geometry.coordinates; if(!c||c.length<2) return null; const lon=Number(c[0]), lat=Number(c[1]); if(!isFinite(lat)||!isFinite(lon)) return null; return {id:i,lat,lon,p:f.properties||{}};}).filter(Boolean);
+}
+async function load(){
   try{
-    setStatus('CSV読み込み中...'); initMap(); allPoints=[]; info={rows:0,bad:0,headers:[],enc:'未判定'}; $('grade').innerHTML='<option value="">全等級</option>'; $('list').innerHTML='';
-    const res=await fetch(CSV_FILE+'?v='+Date.now(),{cache:'no-store'});
-    if(!res.ok) throw new Error('kijunten.csv が取得できません HTTP '+res.status);
-    const buf=await res.arrayBuffer(); const dec=decodeArrayBuffer(buf); info.enc=dec.enc;
-    const rows=parseDelimited(dec.text); info.rows=rows.length;
-    const miss=REQUIRED.filter(k=>!info.headers.includes(k));
-    if(miss.length) throw new Error('CSVに必要列がありません: '+miss.join(', ')+' / 読み込んだ列: '+info.headers.join(' | '));
-    let bad=0;
-    allPoints=rows.map(o=>{const lat=dmsToDeg(o['北緯']),lon=dmsToDeg(o['東経']); if(!Number.isFinite(lat)||!Number.isFinite(lon))bad++; return {code:o['基準点コード'],grade:o['等級種別'],name:o['基準点名'],lat,lon,status:o['現況状態'],elev:o['標高'],pref:o['都道府県名']||'',city:o['自治体名']||'',x:o['X']||'',y:o['Y']||''};}).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
-    info.bad=bad;
-    [...new Set(allPoints.map(p=>p.grade).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja')).forEach(g=>$('grade').insertAdjacentHTML('beforeend',`<option value="${esc(g)}">${esc(g)}</option>`));
+    const res=await fetch(DATA_URL+'?v='+Date.now(),{cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const gj=await res.json();
+    data=parseFeatures(gj);
+    buildGrade();
+    $('status').textContent=`GeoJSON読込OK：${(gj.features||[]).length}件 / 有効座標 ${data.length}点。現在地ボタンを押してください。`;
     render();
-  }catch(e){setStatus('<span class="warn">読み込みエラー: '+esc(e.message)+'</span><br><span class="sub">GitHubに index.html と kijunten.csv が同じフォルダで置かれているか確認。</span>');$('list').innerHTML='<div class="card warn">CSVを読めていません。</div>';}
+  }catch(e){$('status').innerHTML='<span class="err">読み込みエラー：</span>'+e.message+'。index.html と kijunten.geojson を同じフォルダに置いてください。';}
 }
-
-function safeSimaName(s){return String(s??'').replace(/[\r\n,]/g,' ').trim().slice(0,40)||'NO_NAME';}
-function simaNum(v){const n=parseFloat(String(v??'').replace(/,/g,'')); return Number.isFinite(n)?n.toFixed(3):'';}
-function buildSima(points){
-  const now=new Date();
-  const pad=n=>String(n).padStart(2,'0');
-  const stamp=`${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
-  const lines=[];
-  lines.push('G00,01,基準点選択_'+stamp+',');
-  lines.push('A00,');
-  points.forEach((p,i)=>{
-    const no=i+1;
-    // SIMA座標データ A01: 点番, 点名, X, Y, Z
-    lines.push(`A01,${no},${safeSimaName(p.name||p.code)},${simaNum(p.x)},${simaNum(p.y)},${simaNum(p.elev)},`);
-  });
-  lines.push('A99,');
-  lines.push('G99,');
-  return lines.join('\r\n')+'\r\n';
+function buildGrade(){
+  const grades=[...new Set(data.map(d=>getGrade(d.p)).filter(Boolean))].sort();
+  $('grade').innerHTML='<option value="">等級すべて</option>'+grades.map(g=>`<option>${escapeHtml(g)}</option>`).join('');
 }
-function downloadText(filename,text){
-  const blob=new Blob([text],{type:'text/plain;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click();
-  setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},1000);
-}
-function downloadSelectedSima(){
-  const pts=allPoints.filter(p=>selectedCodes.has(p.code));
-  if(!pts.length){alert('SIMA出力する点をチェックしてください。');return;}
-  const bad=pts.filter(p=>!simaNum(p.x)||!simaNum(p.y));
-  if(bad.length){alert('X/Yが無い点が含まれています。CSVのX/Y列を確認してください。');return;}
-  downloadText('kijunten_selected.sim',buildSima(pts));
-}
-
-function baseFiltered(){const g=$('grade').value,normal=$('normalOnly').checked,q=$('q').value.trim().toLowerCase();return allPoints.filter(p=>(!g||p.grade===g)&&(!normal||String(p.status).trim()==='正常')&&(!q||(p.name+p.code+p.pref+p.city+p.grade).toLowerCase().includes(q)));}
-function getFiltered(){let arr=baseFiltered(); if(userPos){arr=arr.map(p=>({...p,dist:distanceKm(userPos.lat,userPos.lon,p.lat,p.lon)})).sort((a,b)=>a.dist-b.dist); const r=+$('radius').value; return {all:arr,inRadius:arr.filter(p=>p.dist<=r)};} return {all:arr.map(p=>({...p,dist:null})).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ja')),inRadius:null};}
 function render(){
-  initMap(); const filtered=getFiltered(); const limit=+$('limit').value; let arr=userPos?filtered.inRadius:filtered.all; let notice='';
-  if(userPos && arr.length===0 && filtered.all.length){arr=filtered.all.slice(0,Math.min(10,limit)); notice=`<div class="card warn">${$('radius').value}km以内には条件一致点がありません。参考として近い順${arr.length}点を表示します。</div>`;}
-  const shown=arr.slice(0,limit); lastShown=shown;
-  setStatus(`<span class="ok">CSV読込OK</span>：${info.rows}行 / 有効座標 ${allPoints.length}点 / 座標不明 ${info.bad}点 / 文字コード ${esc(info.enc)}<br>条件一致 ${userPos?(filtered.inRadius.length+'点（半径内） / 条件全体 '+filtered.all.length+'点'):(filtered.all.length+'点')} / 表示 ${shown.length}点 / 選択 ${selectedCodes.size}点 ${userPos?'/ 現在地取得済み':'/ 現在地未取得'}`);
-  if(map){markers.forEach(m=>map.removeLayer(m)); markers=[]; shown.forEach(p=>{const m=L.marker([p.lat,p.lon]).addTo(map).bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.grade)} / ${esc(p.status)}${p.dist!=null?'<br>'+p.dist.toFixed(2)+'km':''}<br><a target="_blank" href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}">Googleマップ</a>`); markers.push(m);}); if(meMarker){map.removeLayer(meMarker);meMarker=null;} if(userPos){meMarker=L.circleMarker([userPos.lat,userPos.lon],{radius:8,color:'#d00'}).addTo(map).bindPopup('現在地'); if(shown.length){map.fitBounds(L.latLngBounds([[userPos.lat,userPos.lon],...shown.map(p=>[p.lat,p.lon])]).pad(0.18));}else{map.setView([userPos.lat,userPos.lon],13);}} else if(shown.length){map.fitBounds(L.latLngBounds(shown.map(p=>[p.lat,p.lon])).pad(0.2));} setTimeout(()=>map.invalidateSize(),150);}
-  $('list').innerHTML=notice+(shown.map(p=>{const mapurl=`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`;const nav=`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}&travelmode=driving`;return `<div class="card"><label class="name"><input type="checkbox" class="ptcheck" data-code="${esc(p.code)}" ${selectedCodes.has(p.code)?'checked':''}> ${esc(p.name)} ${p.dist!=null?`<span class="dist">${p.dist.toFixed(2)}km</span>`:''}</label><div class="meta">${esc(p.grade)} / ${esc(p.status)}<br>コード: ${esc(p.code)}<br>${esc(p.pref)} ${esc(p.city)}<br>緯度経度: ${p.lat.toFixed(7)}, ${p.lon.toFixed(7)}<br>標高: ${esc(p.elev)} / XY: ${esc(p.x)}, ${esc(p.y)}</div><div class="links"><a target="_blank" href="${mapurl}">Googleマップ</a><a target="_blank" href="${nav}">経路</a></div></div>`}).join('') || '<div class="card warn">条件に合う点がありません。等級を全等級に戻す、または「正常のみ」を外してください。</div>');
+  const r=Number($('radius').value)*1000, grade=$('grade').value, kind=$('kind').value, q=$('q').value.trim().toLowerCase(), max=Number($('max').value);
+  let arr=data.map(d=>({...d,dist: currentPos?hav(currentPos.lat,currentPos.lon,d.lat,d.lon):null}));
+  arr=arr.filter(d=>{
+    const p=d.p, text=(getName(p)+' '+getCode(p)+' '+getGrade(p)+' '+getStatus(p)+' '+norm(p['計画機関名'])).toLowerCase();
+    if(currentPos && d.dist>r) return false;
+    if(grade && getGrade(p)!==grade) return false;
+    if(kind && getKind(p)!==kind) return false;
+    if($('normalOnly').checked && !isNormal(getStatus(p))) return false;
+    if(q && !text.includes(q)) return false;
+    return true;
+  });
+  arr.sort((a,b)=>(a.dist??Infinity)-(b.dist??Infinity));
+  const total=arr.length; shown=arr.slice(0,max);
+  drawMap(shown);
+  $('status').textContent=`読込 ${data.length}点中 ${total}点該当 / 表示 ${shown.length}点`+(currentPos?` / 現在地から${$('radius').value}km以内`:' / 現在地未取得');
+  drawList(shown,total);
 }
-
-$('list').addEventListener('change',e=>{
-  if(e.target.classList.contains('ptcheck')){
-    const code=e.target.dataset.code;
-    if(e.target.checked) selectedCodes.add(code); else selectedCodes.delete(code);
-    render();
-  }
-});
-$('dlSimaBtn').onclick=downloadSelectedSima;
-$('selShownBtn').onclick=()=>{lastShown.forEach(p=>selectedCodes.add(p.code)); render();};
-$('clearSelBtn').onclick=()=>{selectedCodes.clear(); render();};
-$('locBtn').onclick=()=>{if(!navigator.geolocation){setStatus('<span class="warn">このブラウザでは位置情報が使えません。</span>');return;} setStatus('現在地取得中...'); navigator.geolocation.getCurrentPosition(pos=>{userPos={lat:pos.coords.latitude,lon:pos.coords.longitude};render();},err=>{setStatus('<span class="warn">現在地取得失敗: '+esc(err.message)+'</span>');render();},{enableHighAccuracy:true,timeout:15000,maximumAge:10000});};
-$('reloadBtn').onclick=loadCSV; ['radius','grade','normalOnly','q','limit'].forEach(id=>$(id).addEventListener('input',render)); window.addEventListener('load',loadCSV);
+function drawMap(arr){markers.clearLayers(); if(currentPos){L.circleMarker([currentPos.lat,currentPos.lon],{radius:8}).bindPopup('現在地').addTo(markers);}
+  arr.forEach(d=>L.marker([d.lat,d.lon]).bindPopup(`<b>${escapeHtml(getName(d.p))}</b><br>${escapeHtml(getGrade(d.p))}<br>${d.dist!=null?(d.dist/1000).toFixed(2)+' km':''}`).addTo(markers));
+  if(currentPos) map.setView([currentPos.lat,currentPos.lon],13); else if(arr[0]) map.setView([arr[0].lat,arr[0].lon],12);
+}
+function drawList(arr,total){
+  if(!arr.length){$('list').innerHTML='<div class="card warn">条件に合う点がありません。半径や正常のみを変更してください。</div>'; return;}
+  $('list').innerHTML=arr.map(d=>{const p=d.p, id=d.id; const checked=selected.has(id)?'checked':''; const dist=d.dist!=null?`<span class="pill">${(d.dist/1000).toFixed(2)}km</span>`:''; return `<div class="card"><div class="row"><input type="checkbox" data-id="${id}" ${checked}><div><div class="title">${escapeHtml(getName(p))}</div><div>${dist}<span class="pill">${escapeHtml(getKind(p))}</span><span class="pill">${escapeHtml(getGrade(p))}</span></div><div class="meta">コード/ID：${escapeHtml(getCode(p)||'-')}<br>状態：${escapeHtml(getStatus(p)||'-')} / 標高：${escapeHtml(getElev(p)||'-')}<br>${escapeHtml(norm(p['計画機関名']||p['_sourceFile']||''))}</div><div class="links"><a href="https://maps.google.com/?q=${d.lat},${d.lon}" target="_blank">Googleマップ</a><a href="https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lon}" target="_blank">経路</a></div></div></div></div>`}).join('');
+  document.querySelectorAll('#list input[type=checkbox]').forEach(cb=>cb.onchange=e=>{const id=Number(e.target.dataset.id); e.target.checked?selected.add(id):selected.delete(id);});
+}
+function escapeHtml(s){return norm(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+// JGD2011 / Japan Plane Rectangular CS II approximation. proj returns [E,Y/easting, N/X/northing]
+if(window.proj4){proj4.defs('JPRCS2','+proj=tmerc +lat_0=33 +lon_0=131 +k=0.9999 +x_0=0 +y_0=0 +ellps=GRS80 +units=m +no_defs');}
+function xy(d){
+  const p=d.p;
+  let X=Number(p['X']||p['平面直角座標系X']||p['平面直角座標系(X)']||p['平面直角座標系Ｘ']);
+  let Y=Number(p['Y']||p['平面直角座標系Y']||p['平面直角座標系(Y)']||p['平面直角座標系Ｙ']);
+  if(isFinite(X)&&isFinite(Y)) return {X,Y,note:''};
+  if(window.proj4){const r=proj4('EPSG:4326','JPRCS2',[d.lon,d.lat]); return {X:r[1],Y:r[0],note:'換算'};}
+  return {X:d.lat,Y:d.lon,note:'緯度経度'};
+}
+function downloadSima(){
+  const rows=[...selected].map(id=>data.find(d=>d.id===id)).filter(Boolean);
+  if(!rows.length){alert('点を選択してください');return;}
+  const lines=[]; lines.push('G00,01,基準点選択'); lines.push('Z00,座標データ');
+  rows.forEach((d,i)=>{const p=d.p, c=xy(d), name=getName(p).replace(/,/g,' '), z=getElev(p)||'0'; lines.push(`A01,${i+1},${name},${c.X.toFixed(4)},${c.Y.toFixed(4)},${z}`);});
+  lines.push('Z99'); lines.push('G99');
+  const blob=new Blob([lines.join('\r\n')+'\r\n'],{type:'text/plain;charset=shift_jis'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='selected_kijunten.sim'; a.click(); URL.revokeObjectURL(a.href);
+}
+$('locBtn').onclick=()=>navigator.geolocation?navigator.geolocation.getCurrentPosition(pos=>{currentPos={lat:pos.coords.latitude,lon:pos.coords.longitude}; render();},err=>alert('現在地を取得できません: '+err.message),{enableHighAccuracy:true,timeout:10000,maximumAge:30000}):alert('このブラウザは位置情報に非対応です');
+['radius','grade','kind','q','normalOnly','max'].forEach(id=>$(id).addEventListener(id==='q'?'input':'change',render));
+$('selectShown').onclick=()=>{shown.forEach(d=>selected.add(d.id)); render();}; $('clearSel').onclick=()=>{selected.clear(); render();}; $('dlSima').onclick=downloadSima;
+initMap(); load();
 </script>
 </body>
 </html>
