@@ -29,7 +29,7 @@
 </head>
 <body>
 <header>
-  <h1>基準点マップ</h1><div class="ver">v2026-05-06-full-filter-colored-marker-50</div>
+  <h1>基準点マップ</h1><div class="ver">v2026-05-06-radius-100-300-3k-5k</div>
   <div class="legend">
     <span class="rankPill rank1">1級/TR1/一等</span>
     <span class="rankPill rank2">2級/TR2/二等</span>
@@ -39,12 +39,10 @@
   <div class="controls">
     <button id="locBtn">現在地から検索</button>
     <select id="radius">
-      <option value="1">1km以内</option>
-      <option value="3">3km以内</option>
-      <option value="5" selected>5km以内</option>
-      <option value="10">10km以内</option>
-      <option value="20">20km以内</option>
-      <option value="50">50km以内</option>
+      <option value="0.1">100m以内</option>
+      <option value="0.3" selected>300m以内</option>
+      <option value="3">3km以内（GNSS）</option>
+      <option value="5">5km以内（GNSS）</option>
     </select>
     <select id="grade"><option value="">等級すべて</option></select>
     <select id="kind">
