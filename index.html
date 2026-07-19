@@ -17,49 +17,21 @@
   label{font-size:13px;display:flex;align-items:center;gap:6px}.full{grid-column:1/-1}
   #map{height:42vh;min-height:280px;background:#ddd}.status{padding:8px 10px;font-size:13px;color:#333;background:#fff;border-bottom:1px solid #ddd}
   #list{padding:8px}.card{background:#fff;border:1px solid #ddd;border-radius:12px;margin:8px 0;padding:10px;box-shadow:0 1px 2px #0001}
-  .row{display:flex;gap:8px;align-items:flex-start}.title{font-weight:700;font-size:16px}.meta{font-size:13px;color:#444;margin-top:4px;line-height:1.5}.links a{display:inline-block;margin:8px 8px 0 0;color:#0b66c3;text-decoration:none;font-weight:600}
-  .pill{display:inline-block;border-radius:999px;background:#eef;padding:2px 7px;margin-right:4px;font-size:12px}
-  .rankPill{display:inline-block;border-radius:999px;padding:3px 9px;margin-right:4px;font-size:12px;font-weight:800;color:#111;border:1px solid #0005}
-  .rank1{background:#ff2b2b;color:#fff}.rank2{background:#ffd400;color:#111}.rank3{background:#00b050;color:#fff}.rank4{background:#0070ff;color:#fff}.rankOther{background:#999;color:#fff}
-  .legend{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-  .warn{color:#a15c00}.err{color:#b00020;font-weight:700}
-  .rankMarker{width:18px;height:18px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 2px #3338}
-  .rankMarker.rank1m{background:#ff2b2b}.rankMarker.rank2m{background:#ffd400}.rankMarker.rank3m{background:#00b050}.rankMarker.rank4m{background:#0070ff}.rankMarker.rankOm{background:#999}
+  .row{display:flex;gap:8px;align-items:flex-start}.title{font-weight:700;font-size:16px}.meta{font-size:13px;color:#444;margin-top:4px;line-height:1.5}.links a{display:inline-block;margin:8px 8px 0 0;color:#0b66c3;text-decoration:none;font-weight:600}.pill{display:inline-block;border-radius:999px;background:#eef;padding:2px 7px;margin-right:4px;font-size:12px}.gradePill{font-weight:800;border:1px solid #0004;color:#111}.warn{color:#a15c00}.err{color:#b00020;font-weight:700}
 </style>
 </head>
 <body>
 <header>
-  <h1>基準点マップ</h1><div class="ver">v2026-05-06-radius-100-300-3k-5k</div>
-  <div class="legend">
-    <span class="rankPill rank1">1級/TR1/一等</span>
-    <span class="rankPill rank2">2級/TR2/二等</span>
-    <span class="rankPill rank3">3級/TR3/三等</span>
-    <span class="rankPill rank4">4級/TR4/四等</span>
-  </div>
+  <h1>基準点マップ</h1><div class="ver">v2026-05-05-geojson-r/y/g/b-50</div>
   <div class="controls">
     <button id="locBtn">現在地から検索</button>
-    <select id="radius">
-      <option value="0.1">100m以内</option>
-      <option value="0.3" selected>300m以内</option>
-      <option value="3">3km以内（GNSS）</option>
-      <option value="5">5km以内（GNSS）</option>
-    </select>
+    <select id="radius"><option value="1">1km以内</option><option value="3">3km以内</option><option value="5" selected>5km以内</option><option value="10">10km以内</option><option value="20">20km以内</option><option value="50">50km以内</option></select>
     <select id="grade"><option value="">等級すべて</option></select>
-    <select id="kind">
-      <option value="">Base/Publicすべて</option>
-      <option value="Base">基本基準点</option>
-      <option value="Public">公共基準点</option>
-    </select>
+    <select id="kind"><option value="">Base/Publicすべて</option><option value="Base">基本基準点</option><option value="Public">公共基準点</option></select>
     <input id="q" class="full" placeholder="点名・コード・機関名で検索" />
     <label><input type="checkbox" id="normalOnly" checked> 正常系のみ</label>
-    <select id="max">
-      <option value="50" selected>最大50点</option>
-      <option value="100">最大100点</option>
-      <option value="200">最大200点</option>
-      <option value="500">最大500点</option>
-    </select>
-    <button id="selectShown" class="secondary">表示分選択</button>
-    <button id="clearSel" class="danger">選択解除</button>
+    <select id="max"><option value="50" selected>最大50点</option><option value="100">最大100点</option><option value="200">最大200点</option><option value="500">最大500点</option></select>
+    <button id="selectShown" class="secondary">表示分選択</button><button id="clearSel" class="danger">選択解除</button>
     <button id="dlSima" class="full">選択SIMAダウンロード</button>
   </div>
 </header>
@@ -68,87 +40,48 @@
 <div id="list"></div>
 <script>
 const DATA_URL='kijunten.geojson';
-const defaultCenter=[32.58,131.66];
+const defaultCenter=[32.58,131.66]; // 延岡周辺
 let map, data=[], markers=L.layerGroup(), currentPos=null, shown=[], selected=new Set();
 const $=id=>document.getElementById(id);
-
 function initMap(){
   map=L.map('map').setView(defaultCenter,11);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map);
   markers.addTo(map);
 }
-
 function norm(s){return (s??'').toString().trim();}
 function getName(p){return norm(p['基準点名']||p['点名']||p.name||'名称なし');}
-function getCode(p){return norm(p['基準点コード']||p['成果ID']||p['コード']||'');}
-function getGrade(p){return norm(p['等級種別']||p['等級']||p['種別']||p['type']||'');}
-function getStatus(p){return norm(p['現況状態']||p['成果状態']||p['状態']||'');}
-function getElev(p){return norm(p['標高']||p['標高(m)']||'');}
+function getCode(p){return norm(p['基準点コード']||p['成果ID']||'');}
+function getGrade(p){return norm(p['等級種別']||p['等級']||p['種別']||'');}
+function getStatus(p){return norm(p['現況状態']||p['成果状態']||'');}
+function getElev(p){return norm(p['標高']||'');}
 function getKind(p){return norm(p['_sourceKind']||((p['基準点コード'])?'Base':'Public'));}
 
-function rankTextFromProps(p){
-  return [
-    getGrade(p), getCode(p),
-    p['基準点コード'], p['成果ID'], p['種別コード'], p['等級種別コード'],
-    p['icon'], p['iconUrl'], p['_icon'], p['_sourceFile']
-  ].map(norm).join(' ');
-}
-
-function getRank(p){
-  const s = rankTextFromProps(p);
-  if(/TR1|一等|１級|1級|一級/.test(s)) return 1;
-  if(/TR2|二等|２級|2級|二級/.test(s)) return 2;
-  if(/TR3|三等|３級|3級|三級/.test(s)) return 3;
-  if(/TR4|四等|４級|4級|四級/.test(s)) return 4;
-
-  const joined = Object.values(p||{}).map(norm).join(' ');
-  if(/TR1|一等|１級|1級|一級/.test(joined)) return 1;
-  if(/TR2|二等|２級|2級|二級/.test(joined)) return 2;
-  if(/TR3|三等|３級|3級|三級/.test(joined)) return 3;
-  if(/TR4|四等|４級|4級|四級/.test(joined)) return 4;
-
+function gradeClass(grade){
+  const g=norm(grade);
+  if(g.includes('TR1')||g.includes('一等')||g.includes('1級')||g.includes('１級')) return 1;
+  if(g.includes('TR2')||g.includes('二等')||g.includes('2級')||g.includes('２級')) return 2;
+  if(g.includes('TR3')||g.includes('三等')||g.includes('3級')||g.includes('３級')) return 3;
+  if(g.includes('TR4')||g.includes('四等')||g.includes('4級')||g.includes('４級')) return 4;
   return 0;
 }
-
-function rankClass(p){
-  const r=getRank(p);
-  if(r===1) return 'rank1';
-  if(r===2) return 'rank2';
-  if(r===3) return 'rank3';
-  if(r===4) return 'rank4';
-  return 'rankOther';
+function gradeColor(grade){
+  switch(gradeClass(grade)){
+    case 1: return '#ff2b2b'; // 赤
+    case 2: return '#ffd400'; // 黄
+    case 3: return '#00b050'; // 緑
+    case 4: return '#0070ff'; // 青
+    default: return '#888888';
+  }
 }
-
-function markerIcon(p){
-  const r=getRank(p);
-  const cls = r===1?'rank1m':r===2?'rank2m':r===3?'rank3m':r===4?'rank4m':'rankOm';
-  return L.divIcon({
-    className:'',
-    html:`<div class="rankMarker ${cls}"></div>`,
-    iconSize:[24,24],
-    iconAnchor:[12,12],
-    popupAnchor:[0,-10]
-  });
+function gradeTextColor(grade){
+  const c=gradeClass(grade);
+  return (c===2) ? '#111' : '#fff';
 }
-
 function isNormal(st){return !st || st.includes('正常') || st.includes('報告なし');}
-function hav(a,b,c,d){
-  const R=6371000,rad=Math.PI/180;
-  const dlat=(c-a)*rad,dlon=(d-b)*rad;
-  const x=Math.sin(dlat/2)**2+Math.cos(a*rad)*Math.cos(c*rad)*Math.sin(dlon/2)**2;
-  return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
-}
-
+function hav(a,b,c,d){const R=6371000,rad=Math.PI/180; const dlat=(c-a)*rad,dlon=(d-b)*rad; const x=Math.sin(dlat/2)**2+Math.cos(a*rad)*Math.cos(c*rad)*Math.sin(dlon/2)**2; return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
 function parseFeatures(gj){
-  return (gj.features||[]).map((f,i)=>{
-    const c=f.geometry&&f.geometry.coordinates;
-    if(!c||c.length<2) return null;
-    const lon=Number(c[0]), lat=Number(c[1]);
-    if(!isFinite(lat)||!isFinite(lon)) return null;
-    return {id:i,lat,lon,p:f.properties||{}};
-  }).filter(Boolean);
+  return (gj.features||[]).map((f,i)=>{const c=f.geometry&&f.geometry.coordinates; if(!c||c.length<2) return null; const lon=Number(c[0]), lat=Number(c[1]); if(!isFinite(lat)||!isFinite(lon)) return null; return {id:i,lat,lon,p:f.properties||{}};}).filter(Boolean);
 }
-
 async function load(){
   try{
     const res=await fetch(DATA_URL+'?v='+Date.now(),{cache:'no-store'});
@@ -158,27 +91,17 @@ async function load(){
     buildGrade();
     $('status').textContent=`GeoJSON読込OK：${(gj.features||[]).length}件 / 有効座標 ${data.length}点。現在地ボタンを押してください。`;
     render();
-  }catch(e){
-    $('status').innerHTML='<span class="err">読み込みエラー：</span>'+e.message+'。index.html と kijunten.geojson を同じフォルダに置いてください。';
-  }
+  }catch(e){$('status').innerHTML='<span class="err">読み込みエラー：</span>'+e.message+'。index.html と kijunten.geojson を同じフォルダに置いてください。';}
 }
-
 function buildGrade(){
   const grades=[...new Set(data.map(d=>getGrade(d.p)).filter(Boolean))].sort();
   $('grade').innerHTML='<option value="">等級すべて</option>'+grades.map(g=>`<option>${escapeHtml(g)}</option>`).join('');
 }
-
 function render(){
-  const r=Number($('radius').value)*1000;
-  const grade=$('grade').value;
-  const kind=$('kind').value;
-  const q=$('q').value.trim().toLowerCase();
-  const max=Number($('max').value);
-
+  const r=Number($('radius').value)*1000, grade=$('grade').value, kind=$('kind').value, q=$('q').value.trim().toLowerCase(), max=Number($('max').value);
   let arr=data.map(d=>({...d,dist: currentPos?hav(currentPos.lat,currentPos.lon,d.lat,d.lon):null}));
   arr=arr.filter(d=>{
-    const p=d.p;
-    const text=(getName(p)+' '+getCode(p)+' '+getGrade(p)+' '+getStatus(p)+' '+norm(p['計画機関名'])+' '+norm(p['自治体名'])).toLowerCase();
+    const p=d.p, text=(getName(p)+' '+getCode(p)+' '+getGrade(p)+' '+getStatus(p)+' '+norm(p['計画機関名'])).toLowerCase();
     if(currentPos && d.dist>r) return false;
     if(grade && getGrade(p)!==grade) return false;
     if(kind && getKind(p)!==kind) return false;
@@ -187,120 +110,44 @@ function render(){
     return true;
   });
   arr.sort((a,b)=>(a.dist??Infinity)-(b.dist??Infinity));
-  const total=arr.length;
-  shown=arr.slice(0,max);
+  const total=arr.length; shown=arr.slice(0,max);
   drawMap(shown);
   $('status').textContent=`読込 ${data.length}点中 ${total}点該当 / 表示 ${shown.length}点`+(currentPos?` / 現在地から${$('radius').value}km以内`:' / 現在地未取得');
   drawList(shown,total);
 }
-
-function drawMap(arr){
-  markers.clearLayers();
-  if(currentPos){
-    L.circleMarker([currentPos.lat,currentPos.lon],{radius:8,color:'#111',weight:2,fillColor:'#fff',fillOpacity:1}).bindPopup('現在地').addTo(markers);
-  }
-  arr.forEach(d=>{
-    L.marker([d.lat,d.lon],{icon:markerIcon(d.p)})
-      .bindPopup(`<b>${escapeHtml(getName(d.p))}</b><br>${escapeHtml(getGrade(d.p))}<br>${d.dist!=null?(d.dist/1000).toFixed(2)+' km':''}`)
-      .addTo(markers);
-  });
-  if(currentPos) map.setView([currentPos.lat,currentPos.lon],13);
-  else if(arr[0]) map.setView([arr[0].lat,arr[0].lon],12);
+function drawMap(arr){markers.clearLayers(); if(currentPos){L.circleMarker([currentPos.lat,currentPos.lon],{radius:8}).bindPopup('現在地').addTo(markers);}
+  arr.forEach(d=>{const p=d.p, gc=gradeColor(getGrade(p)), c=xy(d); const popup=`<b>${escapeHtml(getName(p))}</b><br>${escapeHtml(getGrade(p))}<br>標高：${escapeHtml(getElev(p)||'-')}<br>緯度：${d.lat.toFixed(8)}<br>経度：${d.lon.toFixed(8)}<br>X：${c.X.toFixed(3)} m<br>Y：${c.Y.toFixed(3)} m${c.note?`（${c.note}）`:''}<br>${d.dist!=null?(d.dist/1000).toFixed(2)+' km':''}`; L.circleMarker([d.lat,d.lon],{radius:8,color:'#222',weight:1,fillColor:gc,fillOpacity:0.9}).bindPopup(popup).addTo(markers);});
+  if(currentPos) map.setView([currentPos.lat,currentPos.lon],13); else if(arr[0]) map.setView([arr[0].lat,arr[0].lon],12);
 }
-
 function drawList(arr,total){
-  if(!arr.length){
-    $('list').innerHTML='<div class="card warn">条件に合う点がありません。半径や正常のみを変更してください。</div>';
-    return;
-  }
-  $('list').innerHTML=arr.map(d=>{
-    const p=d.p, id=d.id;
-    const checked=selected.has(id)?'checked':'';
-    const dist=d.dist!=null?`<span class="pill">${(d.dist/1000).toFixed(2)}km</span>`:'';
-    const rc=rankClass(p);
-    return `<div class="card">
-      <div class="row">
-        <input type="checkbox" data-id="${id}" ${checked}>
-        <div>
-          <div class="title">${escapeHtml(getName(p))}</div>
-          <div>
-            ${dist}
-            <span class="pill">${escapeHtml(getKind(p))}</span>
-            <span class="rankPill ${rc}">${escapeHtml(getGrade(p)||'-')}</span>
-          </div>
-          <div class="meta">
-            コード/ID：${escapeHtml(getCode(p)||'-')}<br>
-            状態：${escapeHtml(getStatus(p)||'-')} / 標高：${escapeHtml(getElev(p)||'-')}<br>
-            ${escapeHtml(norm(p['計画機関名']||p['_sourceFile']||p['自治体名']||''))}
-          </div>
-          <div class="links">
-            <a href="https://maps.google.com/?q=${d.lat},${d.lon}" target="_blank">Googleマップ</a>
-            <a href="https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lon}" target="_blank">経路</a>
-          </div>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-
-  document.querySelectorAll('#list input[type=checkbox]').forEach(cb=>cb.onchange=e=>{
-    const id=Number(e.target.dataset.id);
-    e.target.checked?selected.add(id):selected.delete(id);
-  });
+  if(!arr.length){$('list').innerHTML='<div class="card warn">条件に合う点がありません。半径や正常のみを変更してください。</div>'; return;}
+  $('list').innerHTML=arr.map(d=>{const p=d.p, id=d.id; const checked=selected.has(id)?'checked':''; const dist=d.dist!=null?`<span class="pill">${(d.dist/1000).toFixed(2)}km</span>`:''; return `<div class="card"><div class="row"><input type="checkbox" data-id="${id}" ${checked}><div><div class="title">${escapeHtml(getName(p))}</div><div>${dist}<span class="pill">${escapeHtml(getKind(p))}</span><span class="pill gradePill" style="background:${gradeColor(getGrade(p))};color:${gradeTextColor(getGrade(p))}">${escapeHtml(getGrade(p)||'-')}</span></div><div class="meta">コード/ID：${escapeHtml(getCode(p)||'-')}<br>状態：${escapeHtml(getStatus(p)||'-')} / 標高：${escapeHtml(getElev(p)||'-')}<br>緯度：${d.lat.toFixed(8)} / 経度：${d.lon.toFixed(8)}<br>${(()=>{const c=xy(d); return `X：${c.X.toFixed(3)} m / Y：${c.Y.toFixed(3)} m${c.note?`（${c.note}）`:''}`;})()}<br>${escapeHtml(norm(p['計画機関名']||p['_sourceFile']||''))}</div><div class="links"><a href="https://maps.google.com/?q=${d.lat},${d.lon}" target="_blank">Googleマップ</a><a href="https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lon}" target="_blank">経路</a></div></div></div></div>`}).join('');
+  document.querySelectorAll('#list input[type=checkbox]').forEach(cb=>cb.onchange=e=>{const id=Number(e.target.dataset.id); e.target.checked?selected.add(id):selected.delete(id);});
 }
-
-function escapeHtml(s){
-  return norm(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
-}
-
-if(window.proj4){
-  proj4.defs('JPRCS2','+proj=tmerc +lat_0=33 +lon_0=131 +k=0.9999 +x_0=0 +y_0=0 +ellps=GRS80 +units=m +no_defs');
-}
-
+function escapeHtml(s){return norm(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+// JGD2011 / Japan Plane Rectangular CS II approximation. proj returns [E,Y/easting, N/X/northing]
+if(window.proj4){proj4.defs('JPRCS2','+proj=tmerc +lat_0=33 +lon_0=131 +k=0.9999 +x_0=0 +y_0=0 +ellps=GRS80 +units=m +no_defs');}
 function xy(d){
   const p=d.p;
   let X=Number(p['X']||p['平面直角座標系X']||p['平面直角座標系(X)']||p['平面直角座標系Ｘ']);
   let Y=Number(p['Y']||p['平面直角座標系Y']||p['平面直角座標系(Y)']||p['平面直角座標系Ｙ']);
   if(isFinite(X)&&isFinite(Y)) return {X,Y,note:''};
-  if(window.proj4){
-    const r=proj4('EPSG:4326','JPRCS2',[d.lon,d.lat]);
-    return {X:r[1],Y:r[0],note:'換算'};
-  }
+  if(window.proj4){const r=proj4('EPSG:4326','JPRCS2',[d.lon,d.lat]); return {X:r[1],Y:r[0],note:'換算'};}
   return {X:d.lat,Y:d.lon,note:'緯度経度'};
 }
-
 function downloadSima(){
   const rows=[...selected].map(id=>data.find(d=>d.id===id)).filter(Boolean);
   if(!rows.length){alert('点を選択してください');return;}
-  const lines=[];
-  lines.push('G00,01,基準点選択');
-  lines.push('Z00,座標データ');
-  rows.forEach((d,i)=>{
-    const p=d.p, c=xy(d), name=getName(p).replace(/,/g,' '), z=getElev(p)||'0';
-    lines.push(`A01,${i+1},${name},${c.X.toFixed(4)},${c.Y.toFixed(4)},${z}`);
-  });
-  lines.push('Z99');
-  lines.push('G99');
-  const blob=new Blob([lines.join('\r\n')+'\r\n'],{type:'text/plain;charset=utf-8'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='selected_kijunten.sim';
-  a.click();
-  URL.revokeObjectURL(a.href);
+  const lines=[]; lines.push('G00,01,基準点選択'); lines.push('Z00,座標データ');
+  rows.forEach((d,i)=>{const p=d.p, c=xy(d), name=getName(p).replace(/,/g,' '), z=getElev(p)||'0'; lines.push(`A01,${i+1},${name},${c.X.toFixed(4)},${c.Y.toFixed(4)},${z}`);});
+  lines.push('Z99'); lines.push('G99');
+  const blob=new Blob([lines.join('\r\n')+'\r\n'],{type:'text/plain;charset=shift_jis'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='selected_kijunten.sim'; a.click(); URL.revokeObjectURL(a.href);
 }
-
-$('locBtn').onclick=()=>navigator.geolocation?navigator.geolocation.getCurrentPosition(
-  pos=>{currentPos={lat:pos.coords.latitude,lon:pos.coords.longitude}; render();},
-  err=>alert('現在地を取得できません: '+err.message),
-  {enableHighAccuracy:true,timeout:10000,maximumAge:30000}
-):alert('このブラウザは位置情報に非対応です');
-
+$('locBtn').onclick=()=>navigator.geolocation?navigator.geolocation.getCurrentPosition(pos=>{currentPos={lat:pos.coords.latitude,lon:pos.coords.longitude}; render();},err=>alert('現在地を取得できません: '+err.message),{enableHighAccuracy:true,timeout:10000,maximumAge:30000}):alert('このブラウザは位置情報に非対応です');
 ['radius','grade','kind','q','normalOnly','max'].forEach(id=>$(id).addEventListener(id==='q'?'input':'change',render));
-$('selectShown').onclick=()=>{shown.forEach(d=>selected.add(d.id)); render();};
-$('clearSel').onclick=()=>{selected.clear(); render();};
-$('dlSima').onclick=downloadSima;
-
-initMap();
-load();
+$('selectShown').onclick=()=>{shown.forEach(d=>selected.add(d.id)); render();}; $('clearSel').onclick=()=>{selected.clear(); render();}; $('dlSima').onclick=downloadSima;
+initMap(); load();
 </script>
 </body>
 </html>
