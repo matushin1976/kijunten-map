@@ -7,10 +7,11 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/encoding-japanese/2.2.0/encoding.min.js"></script>
 <style>
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;background:#f6f7f9;color:#111}
   header{position:sticky;top:0;z-index:1000;background:#fff;border-bottom:1px solid #ddd;padding:10px}
-  h1{font-size:18px;margin:0 0 4px}.ver{font-size:12px;color:#666}
+  h1{font-size:18px;margin:0 0 4px}.ver{font-size:12px;color:#666}.field{display:flex;flex-direction:column;gap:3px;font-size:12px;color:#555}.field select{width:100%}.checkBox{background:#f3f6fa;border:1px solid #ccd5df;border-radius:8px;padding:7px 9px}.legend{font-size:12px;color:#444;line-height:1.8}.dot{display:inline-block;width:11px;height:11px;border-radius:50%;border:1px solid #333;margin:0 3px 0 8px;vertical-align:-1px}.dot:first-child{margin-left:0}
   .controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
   button,select,input{font-size:15px;padding:9px;border:1px solid #bbb;border-radius:8px;background:#fff}
   button{background:#0b66c3;color:#fff;border:none;font-weight:600}.secondary{background:#444}.danger{background:#888}
@@ -22,15 +23,16 @@
 </head>
 <body>
 <header>
-  <h1>基準点マップ</h1><div class="ver">v2026-05-05-geojson-r/y/g/b-50</div>
+  <h1>基準点マップ</h1><div class="ver">v2026-08-02-map-filter-color-fix</div>
   <div class="controls">
-    <button id="locBtn">現在地から検索</button>
-    <select id="radius"><option value="1">1km以内</option><option value="3">3km以内</option><option value="5" selected>5km以内</option><option value="10">10km以内</option><option value="20">20km以内</option><option value="50">50km以内</option></select>
-    <select id="grade"><option value="">等級すべて</option></select>
-    <select id="kind"><option value="">Base/Publicすべて</option><option value="Base">基本基準点</option><option value="Public">公共基準点</option></select>
+    <label class="checkBox full"><input type="checkbox" id="useLocation"> 現在地を基準に絞り込む</label>
+    <div class="field"><span>現在地からの範囲</span><select id="radius" disabled><option value="1">1km以内</option><option value="3">3km以内</option><option value="5" selected>5km以内</option><option value="10">10km以内</option><option value="20">20km以内</option><option value="50">50km以内</option></select></div>
+    <div class="field"><span>基準点の等級・種類</span><select id="grade"><option value="">すべて表示</option></select></div>
+    <div class="field full"><span>データの区分</span><select id="kind"><option value="">国・自治体等の基準点をすべて表示</option><option value="Base">国土地理院などの基本基準点</option><option value="Public">自治体などの公共基準点</option></select></div>
     <input id="q" class="full" placeholder="点名・コード・機関名で検索" />
-    <label><input type="checkbox" id="normalOnly" checked> 正常系のみ</label>
-    <select id="max"><option value="50" selected>最大50点</option><option value="100">最大100点</option><option value="200">最大200点</option><option value="500">最大500点</option></select>
+    <label><input type="checkbox" id="normalOnly" checked> 利用可能な点のみ</label>
+    <div class="field"><span>表示件数</span><select id="max"><option value="50" selected>最大50点</option><option value="100">最大100点</option><option value="200">最大200点</option><option value="500">最大500点</option></select></div>
+    <div class="legend full"><span class="dot" style="background:#ff2b2b"></span>1級・一等 <span class="dot" style="background:#ffd400"></span>2級・二等 <span class="dot" style="background:#00b050"></span>3級・三等 <span class="dot" style="background:#0070ff"></span>4級・四等</div>
     <button id="selectShown" class="secondary">表示分選択</button><button id="clearSel" class="danger">選択解除</button>
     <button id="dlSima" class="full">選択SIMAダウンロード</button>
   </div>
@@ -41,37 +43,44 @@
 <script>
 const DATA_URL='kijunten.geojson';
 const defaultCenter=[32.58,131.66]; // 延岡周辺
-let map, data=[], markers=L.layerGroup(), currentPos=null, shown=[], selected=new Set();
+let map, data=[], markers=L.layerGroup(), currentPos=null, shown=[], selected=new Set(), locating=false;
 const $=id=>document.getElementById(id);
 function initMap(){
   map=L.map('map').setView(defaultCenter,11);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map);
   markers.addTo(map);
+  map.on('moveend',()=>{if(!$('useLocation').checked && data.length) render();});
 }
 function norm(s){return (s??'').toString().trim();}
 function getName(p){return norm(p['基準点名']||p['点名']||p.name||'名称なし');}
 function getCode(p){return norm(p['基準点コード']||p['成果ID']||'');}
-function getGrade(p){return norm(p['等級種別']||p['等級']||p['種別']||'');}
+function getGrade(p){return norm(p['等級種別']||p['等級種別名称']||p['等級']||p['基準点種別']||p['種別名称']||p['点種']||p['種別']||'');}
 function getStatus(p){return norm(p['現況状態']||p['成果状態']||'');}
 function getElev(p){return norm(p['標高']||'');}
 function getKind(p){return norm(p['_sourceKind']||((p['基準点コード'])?'Base':'Public'));}
+function getKindLabel(p){return getKind(p)==='Base'?'基本基準点（国土地理院など）':'公共基準点（自治体など）';}
 
 function gradeClass(grade){
-  const g=norm(grade);
-  if(g.includes('TR1')||g.includes('一等')||g.includes('1級')||g.includes('１級')) return 1;
-  if(g.includes('TR2')||g.includes('二等')||g.includes('2級')||g.includes('２級')) return 2;
-  if(g.includes('TR3')||g.includes('三等')||g.includes('3級')||g.includes('３級')) return 3;
-  if(g.includes('TR4')||g.includes('四等')||g.includes('4級')||g.includes('４級')) return 4;
+  const g=norm(grade).toUpperCase().replace(/\s/g,'');
+  if(/TR[-_ ]?1|一等|一級|1等|1級|１等|１級/.test(g)) return 1;
+  if(/TR[-_ ]?2|二等|二級|2等|2級|２等|２級/.test(g)) return 2;
+  if(/TR[-_ ]?3|三等|三級|3等|3級|３等|３級/.test(g)) return 3;
+  if(/TR[-_ ]?4|四等|四級|4等|4級|４等|４級/.test(g)) return 4;
   return 0;
 }
 function gradeColor(grade){
-  switch(gradeClass(grade)){
-    case 1: return '#ff2b2b'; // 赤
-    case 2: return '#ffd400'; // 黄
-    case 3: return '#00b050'; // 緑
-    case 4: return '#0070ff'; // 青
-    default: return '#888888';
+  const g=norm(grade);
+  switch(gradeClass(g)){
+    case 1: return '#ff2b2b';
+    case 2: return '#ffd400';
+    case 3: return '#00b050';
+    case 4: return '#0070ff';
   }
+  if(g.includes('電子基準点')) return '#9c27b0';
+  if(g.includes('水準')) return '#8d6e63';
+  if(g.includes('三角')) return '#00a878';
+  if(g.includes('公共')) return '#ff8c00';
+  return '#666666';
 }
 function gradeTextColor(grade){
   const c=gradeClass(grade);
@@ -95,33 +104,38 @@ async function load(){
 }
 function buildGrade(){
   const grades=[...new Set(data.map(d=>getGrade(d.p)).filter(Boolean))].sort();
-  $('grade').innerHTML='<option value="">等級すべて</option>'+grades.map(g=>`<option>${escapeHtml(g)}</option>`).join('');
+  $('grade').innerHTML='<option value="">すべて表示</option>'+grades.map(g=>`<option>${escapeHtml(g)}</option>`).join('');
 }
 function render(){
+  const useLocation=$('useLocation').checked;
   const r=Number($('radius').value)*1000, grade=$('grade').value, kind=$('kind').value, q=$('q').value.trim().toLowerCase(), max=Number($('max').value);
-  let arr=data.map(d=>({...d,dist: currentPos?hav(currentPos.lat,currentPos.lon,d.lat,d.lon):null}));
+  const bounds=map.getBounds();
+  let arr=data.map(d=>({...d,dist:(useLocation&&currentPos)?hav(currentPos.lat,currentPos.lon,d.lat,d.lon):null}));
   arr=arr.filter(d=>{
     const p=d.p, text=(getName(p)+' '+getCode(p)+' '+getGrade(p)+' '+getStatus(p)+' '+norm(p['計画機関名'])).toLowerCase();
-    if(currentPos && d.dist>r) return false;
+    if(useLocation){
+      if(!currentPos || d.dist>r) return false;
+    }else if(!bounds.contains([d.lat,d.lon])) return false;
     if(grade && getGrade(p)!==grade) return false;
     if(kind && getKind(p)!==kind) return false;
     if($('normalOnly').checked && !isNormal(getStatus(p))) return false;
     if(q && !text.includes(q)) return false;
     return true;
   });
-  arr.sort((a,b)=>(a.dist??Infinity)-(b.dist??Infinity));
+  if(useLocation) arr.sort((a,b)=>(a.dist??Infinity)-(b.dist??Infinity));
   const total=arr.length; shown=arr.slice(0,max);
   drawMap(shown);
-  $('status').textContent=`読込 ${data.length}点中 ${total}点該当 / 表示 ${shown.length}点`+(currentPos?` / 現在地から${$('radius').value}km以内`:' / 現在地未取得');
+  const mode=useLocation?(currentPos?`現在地から${$('radius').value}km以内`:'現在地取得中'):'現在表示中の地図範囲';
+  $('status').textContent=`読込 ${data.length}点中 ${total}点該当 / 表示 ${shown.length}点 / ${mode}`;
   drawList(shown,total);
 }
-function drawMap(arr){markers.clearLayers(); if(currentPos){L.circleMarker([currentPos.lat,currentPos.lon],{radius:8}).bindPopup('現在地').addTo(markers);}
+function drawMap(arr){markers.clearLayers(); if($('useLocation').checked&&currentPos){L.circleMarker([currentPos.lat,currentPos.lon],{radius:8,color:'#111',weight:2,fillColor:'#fff',fillOpacity:1}).bindPopup('現在地').addTo(markers);}
   arr.forEach(d=>{const p=d.p, gc=gradeColor(getGrade(p)), c=xy(d); const popup=`<b>${escapeHtml(getName(p))}</b><br>${escapeHtml(getGrade(p))}<br>標高：${escapeHtml(getElev(p)||'-')}<br>緯度：${d.lat.toFixed(8)}<br>経度：${d.lon.toFixed(8)}<br>X：${c.X.toFixed(3)} m<br>Y：${c.Y.toFixed(3)} m${c.note?`（${c.note}）`:''}<br>${d.dist!=null?(d.dist/1000).toFixed(2)+' km':''}`; L.circleMarker([d.lat,d.lon],{radius:8,color:'#222',weight:1,fillColor:gc,fillOpacity:0.9}).bindPopup(popup).addTo(markers);});
-  if(currentPos) map.setView([currentPos.lat,currentPos.lon],13); else if(arr[0]) map.setView([arr[0].lat,arr[0].lon],12);
 }
+
 function drawList(arr,total){
-  if(!arr.length){$('list').innerHTML='<div class="card warn">条件に合う点がありません。半径や正常のみを変更してください。</div>'; return;}
-  $('list').innerHTML=arr.map(d=>{const p=d.p, id=d.id; const checked=selected.has(id)?'checked':''; const dist=d.dist!=null?`<span class="pill">${(d.dist/1000).toFixed(2)}km</span>`:''; return `<div class="card"><div class="row"><input type="checkbox" data-id="${id}" ${checked}><div><div class="title">${escapeHtml(getName(p))}</div><div>${dist}<span class="pill">${escapeHtml(getKind(p))}</span><span class="pill gradePill" style="background:${gradeColor(getGrade(p))};color:${gradeTextColor(getGrade(p))}">${escapeHtml(getGrade(p)||'-')}</span></div><div class="meta">コード/ID：${escapeHtml(getCode(p)||'-')}<br>状態：${escapeHtml(getStatus(p)||'-')} / 標高：${escapeHtml(getElev(p)||'-')}<br>緯度：${d.lat.toFixed(8)} / 経度：${d.lon.toFixed(8)}<br>${(()=>{const c=xy(d); return `X：${c.X.toFixed(3)} m / Y：${c.Y.toFixed(3)} m${c.note?`（${c.note}）`:''}`;})()}<br>${escapeHtml(norm(p['計画機関名']||p['_sourceFile']||''))}</div><div class="links"><a href="https://maps.google.com/?q=${d.lat},${d.lon}" target="_blank">Googleマップ</a><a href="https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lon}" target="_blank">経路</a></div></div></div></div>`}).join('');
+  if(!arr.length){$('list').innerHTML='<div class="card warn">条件に合う点がありません。地図を動かすか、範囲・等級・利用可能のみの条件を変更してください。</div>'; return;}
+  $('list').innerHTML=arr.map(d=>{const p=d.p, id=d.id; const checked=selected.has(id)?'checked':''; const dist=d.dist!=null?`<span class="pill">${(d.dist/1000).toFixed(2)}km</span>`:''; return `<div class="card"><div class="row"><input type="checkbox" data-id="${id}" ${checked}><div><div class="title">${escapeHtml(getName(p))}</div><div>${dist}<span class="pill">${escapeHtml(getKindLabel(p))}</span><span class="pill gradePill" style="background:${gradeColor(getGrade(p))};color:${gradeTextColor(getGrade(p))}">${escapeHtml(getGrade(p)||'-')}</span></div><div class="meta">コード/ID：${escapeHtml(getCode(p)||'-')}<br>状態：${escapeHtml(getStatus(p)||'-')} / 標高：${escapeHtml(getElev(p)||'-')}<br>緯度：${d.lat.toFixed(8)} / 経度：${d.lon.toFixed(8)}<br>${(()=>{const c=xy(d); return `X：${c.X.toFixed(3)} m / Y：${c.Y.toFixed(3)} m${c.note?`（${c.note}）`:''}`;})()}<br>${escapeHtml(norm(p['計画機関名']||p['_sourceFile']||''))}</div><div class="links"><a href="https://maps.google.com/?q=${d.lat},${d.lon}" target="_blank">Googleマップ</a><a href="https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lon}" target="_blank">経路</a></div></div></div></div>`}).join('');
   document.querySelectorAll('#list input[type=checkbox]').forEach(cb=>cb.onchange=e=>{const id=Number(e.target.dataset.id); e.target.checked?selected.add(id):selected.delete(id);});
 }
 function escapeHtml(s){return norm(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
@@ -138,13 +152,62 @@ function xy(d){
 function downloadSima(){
   const rows=[...selected].map(id=>data.find(d=>d.id===id)).filter(Boolean);
   if(!rows.length){alert('点を選択してください');return;}
-  const lines=[]; lines.push('G00,01,基準点選択'); lines.push('Z00,座標データ');
-  rows.forEach((d,i)=>{const p=d.p, c=xy(d), name=getName(p).replace(/,/g,' '), z=getElev(p)||'0'; lines.push(`A01,${i+1},${name},${c.X.toFixed(4)},${c.Y.toFixed(4)},${z}`);});
-  lines.push('Z99'); lines.push('G99');
-  const blob=new Blob([lines.join('\r\n')+'\r\n'],{type:'text/plain;charset=shift_jis'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='selected_kijunten.sim'; a.click(); URL.revokeObjectURL(a.href);
+
+  // 従来型SIMA座標データ：A00で開始、A99で終了
+  const lines=[];
+  lines.push('G00,04,基準点選択,');
+  lines.push('Z00,座標データ,');
+  lines.push('A00,');
+  rows.forEach((d,i)=>{
+    const p=d.p, c=xy(d);
+    const name=getName(p).replace(/,/g,' ');
+    const z=getElev(p)||'0';
+    lines.push(`A01,${i+1},${name},${c.X.toFixed(4)},${c.Y.toFixed(4)},${z},,`);
+  });
+  lines.push('A99,');
+  lines.push('Z99,');
+  lines.push('G99,');
+
+  const simText=lines.join('\r\n')+'\r\n';
+
+  // Blobのcharset指定だけではShift-JISに変換されないため、実データをCP932互換のSJISへ変換
+  let bytes;
+  if(window.Encoding){
+    const unicodeArray=Encoding.stringToCode(simText);
+    const sjisArray=Encoding.convert(unicodeArray,{to:'SJIS',from:'UNICODE'});
+    bytes=new Uint8Array(sjisArray);
+  }else{
+    alert('文字コード変換ライブラリを読み込めませんでした。通信状態を確認してください。');
+    return;
+  }
+
+  // text/plainだとブラウザが.txtを付ける場合があるためバイナリ扱いで保存
+  const blob=new Blob([bytes],{type:'application/octet-stream'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='selected_kijunten.sim';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
-$('locBtn').onclick=()=>navigator.geolocation?navigator.geolocation.getCurrentPosition(pos=>{currentPos={lat:pos.coords.latitude,lon:pos.coords.longitude}; render();},err=>alert('現在地を取得できません: '+err.message),{enableHighAccuracy:true,timeout:10000,maximumAge:30000}):alert('このブラウザは位置情報に非対応です');
+$('useLocation').onchange=()=>{
+  const on=$('useLocation').checked;
+  $('radius').disabled=!on;
+  if(!on){render();return;}
+  if(currentPos){map.setView([currentPos.lat,currentPos.lon],13);render();return;}
+  if(!navigator.geolocation){alert('このブラウザは位置情報に非対応です');$('useLocation').checked=false;$('radius').disabled=true;render();return;}
+  $('status').textContent='現在地を取得中...';
+  navigator.geolocation.getCurrentPosition(pos=>{
+    currentPos={lat:pos.coords.latitude,lon:pos.coords.longitude};
+    map.setView([currentPos.lat,currentPos.lon],13);
+    render();
+  },err=>{
+    alert('現在地を取得できません: '+err.message);
+    $('useLocation').checked=false;$('radius').disabled=true;render();
+  },{enableHighAccuracy:true,timeout:10000,maximumAge:30000});
+};
 ['radius','grade','kind','q','normalOnly','max'].forEach(id=>$(id).addEventListener(id==='q'?'input':'change',render));
 $('selectShown').onclick=()=>{shown.forEach(d=>selected.add(d.id)); render();}; $('clearSel').onclick=()=>{selected.clear(); render();}; $('dlSima').onclick=downloadSima;
 initMap(); load();
